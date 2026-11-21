@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Survenya | Hospitality data automation and forecasting</title>
+  <meta name="description" content="I automate the daily close, POS-to-GL mapping and weekly forecasting for multi-unit restaurant and hotel groups." />
+  <meta name="theme-color" content="#e8f0f0" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230f1f22'/%3E%3Cpath d='M8 21l5-6 4 3 6-8' fill='none' stroke='%237fe0d3' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>document.documentElement.classList.add('js');</script>
+  <style>
+    :root {
+      --ink: #0f1f22;
+      --muted: #46595d;
+      --accent: #0f766e;
+      --accent-2: #7fe0d3;
+      --bg: #e8f0f0;
+      --glass: rgba(255,255,255,.46);
+      --glass-strong: rgba(255,255,255,.66);
+      --edge: rgba(255,255,255,.75);
+      --shadow: 0 18px 50px rgba(15,60,66,.12);
+      --display: "Inter Tight", Inter, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+      --sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --ease: cubic-bezier(.22,.8,.2,1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 96px; }
+    body { font-family: var(--sans); color: var(--ink); background: var(--bg); line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    a { color: inherit; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+    .wrap { width: min(1120px, 100% - 44px); margin-inline: auto; }
+
+    /* ---------- background ---------- */
+    .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: linear-gradient(160deg, #eef5f5 0%, #dfeaec 55%, #e6eef2 100%); }
+    .blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .75; will-change: transform; }
+    .b1 { width: 52vmax; height: 52vmax; left: -14vmax; top: -16vmax; background: #8fe3d6; animation: drift1 26s ease-in-out infinite alternate; }
+    .b2 { width: 46vmax; height: 46vmax; right: -12vmax; top: 8vmax; background: #a9c8ff; animation: drift2 31s ease-in-out infinite alternate; }
+    .b3 { width: 38vmax; height: 38vmax; left: 22vmax; bottom: -20vmax; background: #ffe1b9; opacity: .6; animation: drift3 35s ease-in-out infinite alternate; }
+    @keyframes drift1 { to { transform: translate(14vmax, 10vmax) scale(1.12); } }
+    @keyframes drift2 { to { transform: translate(-12vmax, 12vmax) scale(.92); } }
+    @keyframes drift3 { to { transform: translate(-10vmax, -8vmax) scale(1.15); } }
+    .grain { position: absolute; inset: 0; opacity: .05; mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+    /* ---------- glass ---------- */
+    .glass { position: relative; background: var(--glass); border: 1px solid var(--edge);
+      -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.9); }
+    .glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s;
+      background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), rgba(255,255,255,.7), transparent 60%); }
+    .glass:hover::before { opacity: 1; }
+
+    /* ---------- loader ---------- */
+    .loader { position: fixed; inset: 0; z-index: 100; background: var(--ink); color: #fff; display: grid; place-items: center;
+      transition: transform 1s var(--ease); }
+    html:not(.js) .loader { display: none; }
+    .loader-inner { display: flex; align-items: center; gap: 16px; }
+    .loader svg { width: 54px; height: 54px; }
+    .loader .box { fill: none; stroke: rgba(255,255,255,.25); stroke-width: 1.5; }
+    .loader .line { fill: none; stroke: var(--accent-2); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw 1.1s .2s var(--ease) forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    .loader .nm { font-family: var(--display); font-weight: 500; letter-spacing: -.03em; font-size: 1.9rem; opacity: 0; transform: translateY(8px); animation: rise .8s .5s var(--ease) forwards; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+    html.ready .loader { transform: translateY(-101%); }
+
+    /* ---------- nav ---------- */
+    .nav { position: fixed; z-index: 50; top: 16px; left: 50%; translate: -50% 0; width: min(920px, 100% - 28px);
+      display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 9px 10px 9px 20px; border-radius: 999px; }
+    .brand { font-weight: 600; text-decoration: none; letter-spacing: -.01em; white-space: nowrap; }
+    .nav ul { display: flex; gap: 6px; list-style: none; }
+    .nav ul a { text-decoration: none; font-size: .92rem; color: var(--muted); padding: 8px 14px; border-radius: 999px; transition: background .2s, color .2s; }
+    .nav ul a:hover { background: rgba(255,255,255,.7); color: var(--ink); }
+    .btn { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 500; font-size: .96rem; padding: 12px 22px; border-radius: 999px;
+      transition: transform .25s var(--ease), background .2s, box-shadow .25s; }
+    .btn-dark { background: var(--ink); color: #fff; box-shadow: 0 8px 22px rgba(15,31,34,.25); }
+    .btn-dark:hover { transform: translateY(-2px); background: #000; box-shadow: 0 12px 28px rgba(15,31,34,.3); }
+    .btn-glass { background: rgba(255,255,255,.5); border: 1px solid var(--edge); }
+    .btn-glass:hover { background: rgba(255,255,255,.8); transform: translateY(-2px); }
+    .nav .btn { padding: 10px 18px; font-size: .9rem; }
+
+    /* ---------- hero ---------- */
+    .hero { min-height: 100svh; display: grid; align-items: center; padding: 130px 0 80px; }
+    .hero-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 28px; align-items: center; }
+    .eyebrow { font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 22px; display: flex; align-items: center; gap: 12px; }
+    .eyebrow::before { content: ""; width: 28px; height: 1px; background: var(--accent); }
+    h1 { font-family: var(--display); font-weight: 500; font-size: clamp(2.2rem, 4.1vw, 3.35rem); line-height: 1.06; text-wrap: balance; letter-spacing: -.045em; margin-bottom: 28px; }
+    h1 em { color: var(--accent); font-style: normal; }
+    .line { display: block; overflow: hidden; padding-bottom: .1em; margin-bottom: -.1em; }
+    .line > span { display: block; }
+    .js .line > span { transform: translateY(112%); transition: transform 1.1s var(--ease); }
+    .js.ready .line > span { transform: none; }
+    .js.ready .line:nth-child(2) > span { transition-delay: .1s; } .js.ready .line:nth-child(3) > span { transition-delay: .2s; }
+    .sub { font-size: 1.12rem; color: var(--muted); max-width: 520px; margin-bottom: 34px; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+    .fade { }
+    .js .fade { opacity: 0; transform: translateY(18px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
+    .js.ready .fade { opacity: 1; transform: none; }
+    .js.ready .fade.d1 { transition-delay: .35s; } .js.ready .fade.d2 { transition-delay: .5s; } .js.ready .fade.d3 { transition-delay: .65s; }
+
+    .stage { position: relative; height: 540px; }
+    .pane { position: absolute; border-radius: 22px; padding: 20px 22px; translate: var(--tx, 0px) var(--ty, 0px); transition: translate .5s var(--ease); }
+    .pane small { display: block; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .pane b { font-family: var(--display); font-weight: 500; font-size: 2.3rem; line-height: 1; letter-spacing: -.04em; display: block; }
+    .pane span.d { font-size: .84rem; color: var(--muted); display: block; margin-top: 8px; }
+    .pane.p1 { width: 250px; left: 0; top: 0; animation: float 9s ease-in-out infinite alternate; }
+    .pane.p2 { width: 280px; right: -10px; top: 29%; animation: float 11s 1s ease-in-out infinite alternate-reverse; background: var(--glass-strong); }
+    .pane.p3 { width: 250px; left: 8%; bottom: 0; animation: float 10s .5s ease-in-out infinite alternate; }
+    @keyframes float { from { transform: translateY(-8px) rotate(-.6deg); } to { transform: translateY(10px) rotate(.6deg); } }
+    .tag { display: inline-flex; align-items: center; gap: 7px; font-size: .78rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px; }
+    .tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .tag.warn { color: #b45309; background: rgba(251,191,36,.2); } .tag.ok { color: #0f766e; background: rgba(45,212,191,.2); }
+    .stage-note { position: absolute; right: 4px; bottom: -4px; font-size: .74rem; color: var(--muted); }
+
+    /* ---------- section basics ---------- */
+    section { padding: 110px 0 0; }
+    .sec-head { max-width: 640px; margin-bottom: 40px; }
+    h2 { font-family: var(--display); font-weight: 500; font-size: clamp(2.2rem, 4.6vw, 3.5rem); line-height: 1.05; letter-spacing: -.04em; margin-bottom: 16px; }
+    .lede { color: var(--muted); font-size: 1.06rem; }
+    .js .reveal { opacity: 0; transform: translateY(34px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
+    .js .reveal.in { opacity: 1; transform: none; }
+
+    /* ---------- demo ---------- */
+    .frame-wrap { clip-path: inset(0 round 30px); will-change: clip-path; }
+    .frame { border-radius: 30px; padding: 10px; }
+    .frame-bar { display: flex; align-items: center; gap: 14px; padding: 6px 12px 12px; }
+    .dots { display: flex; gap: 6px; } .dots i { display: block; width: 10px; height: 10px; border-radius: 50%; background: rgba(15,31,34,.18); }
+    .url { flex: 1; text-align: center; font-size: .78rem; color: var(--muted); background: rgba(255,255,255,.55); border-radius: 999px; padding: 5px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .frame-bar a { font-size: .85rem; font-weight: 500; text-decoration: none; color: var(--accent); white-space: nowrap; }
+    .frame-bar a:hover { text-decoration: underline; }
+    .frame iframe { display: block; width: 100%; height: 780px; border: 0; border-radius: 20px; background: #0b1220; }
+    .note { font-size: .88rem; color: var(--muted); margin-top: 16px; }
+    .note a { color: var(--accent); }
+    .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; margin-top: 54px; }
+    .trio div { border-top: 1px solid rgba(15,31,34,.18); padding-top: 18px; }
+    .trio .n { font-family: var(--display); font-weight: 500; font-size: 1rem; color: var(--accent); display: block; margin-bottom: 6px; }
+    .trio h3 { font-weight: 500; font-size: 1.1rem; margin-bottom: 6px; letter-spacing: -.01em; }
+    .trio p { font-size: .96rem; color: var(--muted); }
+
+    /* ---------- project blocks ---------- */
+    .project { margin-top: 84px; }
+    .p-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; margin-bottom: 26px; }
+    .p-title { font-family: var(--display); font-weight: 500; font-size: clamp(2rem, 3.8vw, 2.9rem); letter-spacing: -.045em; line-height: 1.05; }
+    .p-sub { color: var(--muted); margin-top: 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 1.02rem; }
+    .p-sub i { width: 4px; height: 4px; border-radius: 50%; background: #8fa0a4; display: block; }
+    .p-actions { display: flex; gap: 12px; align-items: center; flex: 0 0 auto; }
+    .icon-btn { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.6); border: 1px solid var(--edge); display: grid; place-items: center; color: var(--ink); transition: transform .25s var(--ease), background .2s; }
+    .icon-btn:hover { background: #fff; transform: translateY(-2px); }
+    .btn-blue { background: linear-gradient(180deg, #5a95ff, #2f6bff); color: #fff; font-weight: 600; padding: 14px 24px; box-shadow: 0 12px 28px rgba(47,107,255,.35), inset 0 1px 0 rgba(255,255,255,.35); }
+    .btn-blue:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgba(47,107,255,.42), inset 0 1px 0 rgba(255,255,255,.35); }
+    .p-desc { color: var(--muted); max-width: 640px; margin-bottom: 26px; }
+    .p-note { font-size: .82rem; color: var(--muted); margin-top: 12px; }
+
+    .panel { border-radius: 46px; background: linear-gradient(180deg, rgba(200,221,255,.92), rgba(226,237,255,.85)); border: 1px solid rgba(255,255,255,.85);
+      padding: 46px 46px 0; height: 540px; overflow: hidden; box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.9); }
+    .win { background: #fff; border-radius: 18px 18px 0 0; box-shadow: 0 24px 70px rgba(40,70,150,.22); height: 640px; font-family: var(--sans); font-size: 12px; color: #1d2a35;
+      display: flex; flex-direction: column; overflow: hidden; line-height: 1.45; }
+    .js .win { transform: translateY(46px); transition: transform 1.2s var(--ease) .15s; }
+    .js .project.in .win { transform: none; }
+    .win-top { display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 50px; border-bottom: 1px solid #edf1f5; flex: 0 0 auto; white-space: nowrap; }
+    .win-top .logo { width: 22px; height: 22px; border-radius: 7px; background: var(--ink); position: relative; flex: 0 0 auto; }
+    .win-top .logo::after { content: ""; position: absolute; inset: 6px; border-radius: 2px; background: var(--accent-2); }
+    .win-top b { font-size: 13px; font-weight: 600; }
+    .win-top .crumb { color: #7a8996; }
+    .win-top .sp { flex: 1; }
+    .chip { border: 1px solid #e3e9ee; border-radius: 8px; padding: 5px 11px; color: #4a5a66; font-weight: 500; }
+    .chip.dark { background: var(--ink); border-color: var(--ink); color: #fff; }
+    .win-body { display: grid; flex: 1; min-height: 0; }
+    .g3 { grid-template-columns: 170px 1fr 252px; }
+    .side { border-right: 1px solid #edf1f5; padding: 14px 10px; background: #fafbfc; }
+    .side h6 { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #8b98a3; font-weight: 600; margin: 4px 8px 10px; }
+    .nav-i { padding: 8px 10px; border-radius: 8px; color: #5b6a76; margin-bottom: 2px; display: flex; gap: 9px; align-items: center; }
+    .nav-i::before { content: ""; width: 12px; height: 12px; border-radius: 4px; background: #cfd8df; flex: 0 0 auto; }
+    .nav-i.on { background: #e5f4f2; color: #0f766e; font-weight: 600; } .nav-i.on::before { background: #0f766e; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c58b; flex: 0 0 auto; }
+    .src { display: flex; align-items: center; gap: 9px; padding: 9px 8px; border-radius: 8px; color: #33434f; font-weight: 500; }
+    .src small { display: block; color: #8b98a3; font-weight: 400; font-size: 10.5px; }
+    .main { padding: 18px 20px; overflow: hidden; }
+    .right { border-left: 1px solid #edf1f5; padding: 16px; background: #fafbfc; }
+    .right h5 { font-size: 12px; font-weight: 600; margin-bottom: 2px; } .right .hint { color: #7a8996; margin-bottom: 12px; font-size: 11px; }
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .k { border: 1px solid #edf1f5; border-radius: 10px; padding: 10px 12px; }
+    .k small { display: block; color: #7a8996; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+    .k b { font-size: 20px; letter-spacing: -.03em; font-weight: 600; }
+    .k.warn b { color: #b45309; }
+    .t { width: 100%; border-collapse: collapse; }
+    .t th { text-align: left; color: #7a8996; font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 8px 6px; border-bottom: 1px solid #edf1f5; }
+    .t td { padding: 10px 6px; border-bottom: 1px solid #f1f4f6; white-space: nowrap; }
+    .t .n { text-align: right; font-variant-numeric: tabular-nums; } .t th.n { text-align: right; }
+    .t tr.sel td { background: #fff8e7; }
+    .pl { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+    .pl.ok { background: #e1f6ee; color: #0f7a55; } .pl.rv { background: #ffefcc; color: #9a5700; } .pl.bl { background: #e3edff; color: #2457c5; }
+    .rcpt { display: flex; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid #edf1f5; }
+    .rcpt small { display: block; color: #8b98a3; }
+    .rcpt.hot { background: #fff8e7; margin: 0 -8px; padding: 9px 8px; border-radius: 8px; border-bottom-color: transparent; }
+    .btn-s { display: block; text-align: center; margin-top: 14px; background: var(--ink); color: #fff; border-radius: 8px; padding: 9px; font-weight: 600; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; color: #5b6a76; margin: 4px 0 12px; }
+    .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; background: var(--c); }
+    .bars { display: flex; align-items: flex-end; gap: 8px; height: 210px; padding: 6px 2px 0; border-bottom: 1px solid #edf1f5; }
+    .bc { flex: 1; height: 100%; display: flex; flex-direction: column-reverse; gap: 2px; }
+    .bc i { display: block; border-radius: 3px; }
+    .axis { display: flex; justify-content: space-between; color: #8b98a3; font-size: 10.5px; padding: 6px 2px 0; }
+    .check { display: flex; gap: 9px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #edf1f5; }
+    .check::before { content: "✓"; display: grid; place-items: center; flex: 0 0 18px; height: 18px; border-radius: 50%; background: #e1f6ee; color: #0f7a55; font-size: 11px; font-weight: 700; }
+    .sw { display: inline-block; width: 26px; height: 15px; border-radius: 99px; background: #0f766e; position: relative; vertical-align: middle; }
+    .sw::after { content: ""; position: absolute; right: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; }
+    .jl { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid #edf1f5; font-variant-numeric: tabular-nums; }
+    .jl span:first-child { color: #33434f; } .jl.tot { font-weight: 600; border-bottom: 0; }
+    .gantt { display: grid; grid-template-columns: 210px repeat(10, 1fr); position: relative; }
+    .gantt .dh { color: #8b98a3; font-size: 10.5px; text-align: center; padding: 8px 0; border-bottom: 1px solid #edf1f5; }
+    .gantt .gl { grid-column: 2 / 12; grid-row: 2 / 6; background: repeating-linear-gradient(to right, #eef2f5 0 1px, transparent 1px 10%); }
+    .gantt .rl { grid-column: 1; padding: 0 12px 0 0; font-weight: 500; align-self: center; z-index: 1; display: flex; flex-direction: column; justify-content: center; }
+    .gantt .rl small { display: block; font-weight: 400; color: #8b98a3; }
+    .gantt .bar { align-self: center; height: 32px; border-radius: 9px; padding: 0 12px; display: flex; align-items: center; font-weight: 600; font-size: 11px; z-index: 1; white-space: nowrap; overflow: hidden; }
+    .bar.me { background: #cdeee9; color: #0b5f58; } .bar.you { background: #dbe7ff; color: #2457c5; } .bar.both { background: #ffeccb; color: #8a5200; } .bar.end { background: #1d2a35; color: #fff; padding: 0 6px; font-size: 10px; }
+    .r2 { grid-row: 2; } .r3 { grid-row: 3; } .r4 { grid-row: 4; } .r5 { grid-row: 5; }
+    .gantt .rl, .gantt .bar { height: 60px; }
+    .gantt .bar { height: 34px; }
+    .phase { border: 1px dashed #cdd7df; border-radius: 10px; padding: 10px 12px; margin-top: 14px; color: #5b6a76; }
+    .phase b { color: #1d2a35; display: block; margin-bottom: 4px; }
+
+    @media (max-width: 900px) {
+      .project { margin-top: 64px; }
+      .p-head { flex-direction: column; gap: 16px; }
+      .panel { padding: 22px 16px 0; height: 470px; border-radius: 30px; }
+      .win { height: 560px; }
+      .g3 { grid-template-columns: 1fr; }
+      .side, .right { display: none; }
+      .kpis { grid-template-columns: repeat(2, 1fr); } .kpis .k:nth-child(3) { display: none; }
+      .hide-m { display: none; }
+      .win-top .crumb, .win-top .chip { display: none; }
+      .gantt { grid-template-columns: 120px repeat(10, 1fr); }
+      .gantt .rl { font-size: 11px; } .gantt .rl small { display: none; }
+      .gantt .bar { padding: 0; font-size: 0; } .gantt .bar.me { padding: 0 6px; font-size: 10px; }
+      .bars { height: 170px; gap: 5px; }
+    }
+
+    /* ---------- contact ---------- */
+    .contact { padding-bottom: 20px; }
+    .cta-panel { border-radius: 36px; padding: clamp(36px, 7vw, 84px); text-align: center; overflow: hidden; }
+    .cta-panel h2 { font-size: clamp(2.4rem, 6vw, 4.6rem); max-width: 760px; margin: 0 auto 18px; }
+    .cta-panel .lede { max-width: 520px; margin: 0 auto 30px; }
+    .cta-panel .cta { justify-content: center; }
+    footer { padding: 50px 0 40px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; font-size: .88rem; color: var(--muted); }
+    footer a { text-decoration: none; margin-left: 18px; color: var(--ink); } footer a:hover { color: var(--accent); }
+
+    /* ---------- responsive ---------- */
+    @media (max-width: 900px) {
+      .hero { padding-top: 112px; }
+      .hero-grid { grid-template-columns: 1fr; }
+      .stage { height: 500px; max-width: 460px; }
+      .pane.p1 { width: 230px; } .pane.p2 { width: 250px; } .pane.p3 { width: 230px; }
+      .nav ul { display: none; }
+      .trio { grid-template-columns: 1fr; }
+      .frame iframe { height: 640px; }
+      .url { display: none; }
+      section { padding-top: 84px; }
+      .line { display: inline; overflow: visible; padding: 0; margin: 0; }
+      .line > span { display: inline; }
+      .js .line > span { transform: none; transition: none; }
+      .js h1 { opacity: 0; transition: opacity 1s var(--ease) .1s; } .js.ready h1 { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .blob, .pane { animation: none !important; }
+      .loader { display: none; }
+      .js .line > span, .js .fade, .js .reveal { transform: none !important; opacity: 1 !important; transition: none !important; }
+      .frame-wrap { clip-path: none !important; }
+    }
+  </style>
+</head>
+<body>    
+  <div class="loader" id="loader" aria-hidden="true">
+    <div class="loader-inner">
+      <svg viewBox="0 0 54 54"><rect class="box" x="1" y="1" width="52" height="52" rx="15"/><path class="line" d="M14 36l9-11 8 6 11-15"/></svg>
+      <span class="nm">Survenya</span>
+    </div>
+  </div>
+
+  <div class="bg" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="grain"></span></div>
+
+  <header class="nav glass">
+    <a class="brand" href="#top">Survenya</a>
+    <nav aria-label="Primary"><ul>
+      <li><a href="#demo">Demo</a></li><li><a href="#work">Past work</a></li><li><a href="#start">Working together</a></li>
+    </ul></nav>
+    <a class="btn btn-dark" href="https://cal.com/survenya-7zzcwb/30min" target="_blank" rel="noopener">Book a call</a>
+  </header>
+
+  <main id="top">
+    <!-- ============ HERO ============ -->
+    <div class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="eyebrow fade">Hospitality data automation &amp; forecasting</p>
+          <h1>
+            <span class="line"><span>I automate the daily close</span></span>
+            <span class="line"><span>and weekly forecast for</span></span>
+            <span class="line"><span>restaurant &amp; hotel <em>groups.</em></span></span>
+          </h1>
+          <p class="sub fade d1">No more merging POS, PMS and GL exports by hand. Variances are flagged the morning after, finance owns the account mappings, and the same clean data feeds forecasts for covers, prep and labor.</p>
+          <div class="cta fade d2">
+            <a class="btn btn-dark" href="https://cal.com/survenya-7zzcwb/30min" target="_blank" rel="noopener">Book a 30-minute call</a>
+            <a class="btn btn-glass" href="#demo">Watch it work&nbsp;↓</a>
+          </div>
+        </div>
+
+        <div class="stage fade d3" id="stage" aria-hidden="true">
+          <div class="pane glass p1" data-depth="14">
+            <small>Gross sales · yesterday</small><b>$62,916</b><span class="d">15.9% above last Friday</span>
+          </div>
+          <div class="pane glass p2" data-depth="26">
+            <span class="tag warn">In review</span>
+            <small>Harbor Steakhouse · cash</small><b>-$215.50</b><span class="d">4.3× tolerance. Held until an approver picks a reason.</span>
+          </div>
+          <div class="pane glass p3" data-depth="18">
+            <span class="tag ok">Balanced</span>
+            <small>Journal ready to post</small><b>$67,684</b><span class="d">Debits equal credits. 6 of 6 categories mapped.</span>
+          </div>
+          <span class="stage-note">Sample data</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ DEMO ============ -->
+    <section id="demo">
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <h2>See it run.</h2>
+          <p class="lede">This is a working app on sample data from five made-up locations. Edit a GL rule, resolve the cash exception, or change tomorrow's weather and watch the numbers follow.</p>
+        </div>
+
+        <div class="frame-wrap" id="frameWrap">
+          <div class="frame glass">
+            <div class="frame-bar">
+              <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="url">ledger-s5mhjbu7tiozawqhktk6bk.streamlit.app</div>
+              <a href="https://ledger-s5mhjbu7tiozawqhktk6bk.streamlit.app/" target="_blank" rel="noopener">Full screen ↗</a>
+            </div>
+            <iframe title="Live demo: hospitality daily close and demand forecast"
+                    src="https://ledger-s5mhjbu7tiozawqhktk6bk.streamlit.app/?embed=true" loading="lazy"></iframe>
+          </div>
+        </div>
+        <p class="note reveal">If you see a "wake up" button, press it. The app sleeps when idle and takes about 30 seconds to start. <a href="https://ledger-s5mhjbu7tiozawqhktk6bk.streamlit.app/" target="_blank" rel="noopener">Open it full screen</a>.</p>
+
+        <div class="trio">
+          <div class="reveal"><span class="n">01</span><h3>Daily roll-up</h3><p>Every location in one morning view: sales, prime cost and cash over/short.</p></div>
+          <div class="reveal"><span class="n">02</span><h3>GL rules</h3><p>Finance edits mappings and tax rates, the journal rebuilds, and nothing posts until the day balances.</p></div>
+          <div class="reveal"><span class="n">03</span><h3>Seven-day forecast</h3><p>Past sales plus weather and local events suggest covers, prep and staffing.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PAST WORK ============ -->
+    <section id="work">
+      <div class="wrap">
+        <div class="sec-head reveal"><h2>Past work</h2><p class="lede">Eight-plus years in data architecture, reconciliation automation and predictive analytics. Client details are anonymized, so the screens below are illustrative.</p></div>
+
+        <!-- 1 -->
+        <article class="project reveal">
+          <div class="p-head">
+            <div><h3 class="p-title">Gross sales reconciliation</h3><p class="p-sub">Automated GSR and cross-system POS audits, with receipt-level drill-through <i></i> 26,208 hours removed</p></div>
+            <div class="p-actions"><a class="icon-btn" href="https://ledger-s5mhjbu7tiozawqhktk6bk.streamlit.app/" target="_blank" rel="noopener" aria-label="Open the live demo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg></a><a class="btn btn-blue" href="#demo">See it live&nbsp;→</a></div>
+          </div>
+          <div class="panel" role="img" aria-label="Illustrative reconciliation screen: POS and ledger totals by unit, with receipt-level drill-through">
+            <div class="win" aria-hidden="true">
+              <div class="win-top"><span class="logo"></span><b>Reconciliation</b><span class="crumb">Gross Sales Report · Yesterday</span><span class="sp"></span><span class="chip">All units</span><span class="chip dark">Export</span></div>
+              <div class="win-body g3">
+                <aside class="side"><h6>Workspace</h6><div class="nav-i">Overview</div><div class="nav-i on">Reconciliation</div><div class="nav-i">Over / short</div><div class="nav-i">Rules</div><div class="nav-i">Audit trail</div></aside>
+                <div class="main">
+                  <div class="kpis"><div class="k"><small>Units matched</small><b>4 of 5</b></div><div class="k warn"><small>Open variance</small><b>$12.50</b></div><div class="k"><small>Receipts checked</small><b>1,284</b></div></div>
+                  <table class="t"><thead><tr><th>Unit</th><th class="n">POS</th><th class="n hide-m">Ledger</th><th class="n hide-m">Diff</th><th>Status</th></tr></thead><tbody>
+                    <tr><td>Unit 01 · Dining</td><td class="n hide-m">$18,420.10</td><td class="n">$18,420.10</td><td class="n hide-m">$0.00</td><td><span class="pl ok">Matched</span></td></tr>
+                    <tr class="sel"><td>Unit 02 · Bar</td><td class="n">$9,310.55</td><td class="n hide-m">$9,298.05</td><td class="n hide-m">$12.50</td><td><span class="pl rv">Review</span></td></tr>
+                    <tr><td>Unit 03 · Retail</td><td class="n hide-m">$4,118.40</td><td class="n">$4,118.40</td><td class="n hide-m">$0.00</td><td><span class="pl ok">Matched</span></td></tr>
+                    <tr><td>Unit 04 · Venue</td><td class="n hide-m">$22,760.00</td><td class="n">$22,760.00</td><td class="n hide-m">$0.00</td><td><span class="pl ok">Matched</span></td></tr>
+                    <tr><td>Unit 05 · Hotel F&amp;B</td><td class="n hide-m">$6,904.25</td><td class="n">$6,904.25</td><td class="n hide-m">$0.00</td><td><span class="pl ok">Matched</span></td></tr>
+                  </tbody></table>
+                </div>
+                <aside class="right"><h5>Drill-through</h5><div class="hint">Unit 02 · Bar · receipts</div>
+                  <div class="rcpt"><span>#48213<small>7:42 pm</small></span><span>$86.40</span></div>
+                  <div class="rcpt"><span>#48217<small>7:58 pm</small></span><span>$41.10</span></div>
+                  <div class="rcpt hot"><span>#48226<small>8:15 pm · not posted</small></span><span>$12.50</span></div>
+                  <div class="rcpt"><span>#48231<small>8:31 pm</small></span><span>$63.00</span></div>
+                  <span class="btn-s">Mark as reviewed</span></aside>
+              </div>
+            </div>
+          </div>
+          <p class="p-note">Illustrative screen on sample data.</p>
+        </article>
+
+        <!-- 2 -->
+        <article class="project reveal">
+          <div class="p-head">
+            <div><h3 class="p-title">One reporting layer</h3><p class="p-sub">F&amp;B, retail and venue data from four systems <i></i> 4 → 1</p></div>
+            <div class="p-actions"><a class="icon-btn" href="https://ledger-s5mhjbu7tiozawqhktk6bk.streamlit.app/" target="_blank" rel="noopener" aria-label="Open the live demo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg></a><a class="btn btn-blue" href="#demo">See it live&nbsp;→</a></div>
+          </div>
+          <div class="panel" role="img" aria-label="Illustrative dashboard: four data sources feeding one revenue view across concepts">
+            <div class="win" aria-hidden="true">
+              <div class="win-top"><span class="logo"></span><b>Revenue</b><span class="crumb">All concepts · Last 14 days</span><span class="sp"></span><span class="chip">Daily</span><span class="chip dark">Share</span></div>
+              <div class="win-body g3">
+                <aside class="side"><h6>Sources</h6>
+                  <div class="src"><span class="dot"></span><span>POS · F&amp;B<small>Synced 4 min ago</small></span></div>
+                  <div class="src"><span class="dot"></span><span>PMS · Rooms<small>Synced 6 min ago</small></span></div>
+                  <div class="src"><span class="dot"></span><span>POS · Retail<small>Synced 4 min ago</small></span></div>
+                  <div class="src"><span class="dot"></span><span>Venue ticketing<small>Synced 9 min ago</small></span></div></aside>
+                <div class="main">
+                  <div class="kpis"><div class="k"><small>Revenue yesterday</small><b>$61,908</b></div><div class="k"><small>Units</small><b>5</b></div><div class="k"><small>Sources reporting</small><b>4 / 4</b></div></div>
+                  <div class="legend"><span style="--c:#14b8a6">F&amp;B</span><span style="--c:#60a5fa">Hotel</span><span style="--c:#fbbf24">Retail</span><span style="--c:#a78bfa">Venue</span></div>
+                  <div class="bars" data-bars></div>
+                  <div class="axis"><span>14 days ago</span><span>Yesterday</span></div>
+                </div>
+                <aside class="right"><h5>Data quality</h5><div class="hint">Checked on every refresh</div>
+                  <div class="check"><span>All four sources reported</span></div>
+                  <div class="check"><span>Totals tie to tenders</span></div>
+                  <div class="check"><span>No unmapped items</span></div>
+                  <div class="check"><span>One chart of accounts across concepts</span></div></aside>
+              </div>
+            </div>
+          </div>
+          <p class="p-note">Illustrative screen on sample data.</p>
+        </article>
+
+        <!-- 3 -->
+        <article class="project reveal">
+          <div class="p-head">
+            <div><h3 class="p-title">POS-to-GL mapping</h3><p class="p-sub">Sales classes, card adjustments, tax and over/short <i></i> Rules finance controls without SQL</p></div>
+            <div class="p-actions">
+              <a class="icon-btn" href="https://ledger-s5mhjbu7tiozawqhktk6bk.streamlit.app/" target="_blank" rel="noopener" aria-label="Open the live demo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg></a>
+              <a class="btn btn-blue" href="#demo">See it live&nbsp;→</a>
+            </div>
+          </div>
+          <div class="panel" role="img" aria-label="Illustrative mapping screen: POS categories mapped to GL accounts with a balanced journal preview">
+            <div class="win" aria-hidden="true">
+              <div class="win-top"><span class="logo"></span><b>Mapping rules</b><span class="crumb">POS category → GL account</span><span class="sp"></span><span class="chip">Version 12</span><span class="chip dark">Apply rules</span></div>
+              <div class="win-body g3">
+                <aside class="side"><h6>Workspace</h6><div class="nav-i">Overview</div><div class="nav-i on">Mapping rules</div><div class="nav-i">Journal</div><div class="nav-i">Over / short</div><div class="nav-i">Audit trail</div></aside>
+                <div class="main">
+                  <table class="t"><thead><tr><th>POS category</th><th>GL account</th><th class="n">Tax</th><th class="n">Active</th></tr></thead><tbody>
+                    <tr><td>Food - Entrees</td><td>4010 Food Revenue</td><td class="n">7.00%</td><td class="n"><span class="sw"></span></td></tr>
+                    <tr><td>Beverage - Alcohol</td><td>4020 Liquor &amp; Wine</td><td class="n">9.00%</td><td class="n"><span class="sw"></span></td></tr>
+                    <tr><td>Beverage - Non-Alc</td><td>4015 Non-Alc Beverage</td><td class="n">7.00%</td><td class="n"><span class="sw"></span></td></tr>
+                    <tr><td>Private Events</td><td>4050 Banquet &amp; Catering</td><td class="n">7.50%</td><td class="n"><span class="sw"></span></td></tr>
+                    <tr><td>Retail - Merchandise</td><td>4110 Retail Merchandise</td><td class="n">8.00%</td><td class="n"><span class="sw"></span></td></tr>
+                    <tr><td>Retail - Packaged Food</td><td>4115 Retail Packaged Food</td><td class="n">7.00%</td><td class="n"><span class="sw"></span></td></tr>
+                  </tbody></table>
+                  <div class="phase"><b>Unmapped category?</b>Sales are held in suspense and the close is blocked until a rule exists.</div>
+                </div>
+                <aside class="right"><h5>Journal preview</h5><div class="hint">Balanced double entry</div>
+                  <div class="jl"><span>Cash clearing</span><span>12,480.20</span></div>
+                  <div class="jl"><span>Card clearing</span><span>41,104.70</span></div>
+                  <div class="jl"><span>Card fees</span><span>1,011.10</span></div>
+                  <div class="jl"><span>Room receivable</span><span>8,210.00</span></div>
+                  <div class="jl"><span>Cash over / short</span><span>248.30</span></div>
+                  <div class="jl tot"><span>Debits</span><span>63,054.30</span></div>
+                  <div class="jl"><span>Revenue (6 accounts)</span><span>58,930.00</span></div>
+                  <div class="jl"><span>Sales tax payable</span><span>4,124.30</span></div>
+                  <div class="jl tot"><span>Credits</span><span>63,054.30</span></div>
+                  <span class="pl ok" style="margin-top:10px">Balanced</span></aside>
+              </div>
+            </div>
+          </div>
+          <p class="p-note">Illustrative screen on sample data. The live demo above is a working version.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ WORKING TOGETHER ============ -->
+    <section id="start">
+      <div class="wrap">
+        <div class="sec-head reveal"><h2>Working together</h2><p class="lede">Start with one report at a fixed scope. Your POS and PMS stay exactly as they are. If it works, we add over/short alerts, prime-cost tracking and demand forecasts.</p></div>
+        <article class="project reveal" style="margin-top:0">
+          <div class="p-head">
+            <div><h3 class="p-title">10-day reporting pilot</h3><p class="p-sub">Send your most painful weekly roll-up <i></i> A working dashboard in ten business days</p></div>
+            <div class="p-actions"><a class="icon-btn" href="mailto:ledgerdataautomation@gmail.com" aria-label="Email me"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 8l8 6 8-6"/></svg></a><a class="btn btn-blue" href="https://cal.com/survenya-7zzcwb/30min" target="_blank" rel="noopener">Book a call&nbsp;→</a></div>
+          </div>
+          <div class="panel" role="img" aria-label="Illustrative 10-day plan: you send the report, I build the automation, you review, then hand-off">
+            <div class="win" aria-hidden="true">
+              <div class="win-top"><span class="logo"></span><b>Pilot plan</b><span class="crumb">10 business days</span><span class="sp"></span><span class="chip">Fixed scope</span></div>
+              <div class="win-body g3">
+                <aside class="side"><h6>Plan</h6><div class="nav-i on">Timeline</div><div class="nav-i">Inputs</div><div class="nav-i">Deliverables</div><div class="nav-i">What's next</div></aside>
+                <div class="main">
+                  <div class="gantt">
+                    <div class="dh" style="grid-column:1"></div>
+                    <div class="dh">1</div><div class="dh">2</div><div class="dh">3</div><div class="dh">4</div><div class="dh">5</div><div class="dh">6</div><div class="dh">7</div><div class="dh">8</div><div class="dh">9</div><div class="dh">10</div>
+                    <div class="gl"></div>
+                    <div class="rl r2">You send the report<small>and sample exports</small></div><div class="bar you r2" style="grid-column:2/4">Exports</div>
+                    <div class="rl r3">I automate it<small>cleaning, rules, pipeline</small></div><div class="bar me r3" style="grid-column:4/9">Build and test</div>
+                    <div class="rl r4">We review it<small>with your team</small></div><div class="bar both r4" style="grid-column:9/11">Review</div>
+                    <div class="rl r5">Hand-off<small>and what's next</small></div><div class="bar end r5" style="grid-column:11/12">Done</div>
+                  </div>
+                  <div class="phase"><b>Phase 2 · optional</b>Over/short alerts · menu and prime-cost tracking · demand forecasts for covers, prep and labor.</div>
+                </div>
+                <aside class="right"><h5>At day 10 you have</h5><div class="hint">Illustrative plan, adjusted to your report</div>
+                  <div class="check"><span>A dashboard you can rely on</span></div>
+                  <div class="check"><span>Rules your team controls</span></div>
+                  <div class="check"><span>Your POS and PMS untouched</span></div></aside>
+              </div>
+            </div>
+          </div>
+          <p class="p-note">Illustrative plan. The exact schedule depends on your report and exports.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ CONTACT ============ -->
+    <section class="contact">
+      <div class="wrap">
+        <div class="cta-panel glass reveal">
+          <h2>Send me the report you dread.</h2>
+          <p class="lede">If someone on your team spends hours every week assembling the same numbers, I'd like to look at it. A short call is enough to tell you whether automating it is worth the effort.</p>
+          <div class="cta">
+            <a class="btn btn-dark" href="https://cal.com/survenya-7zzcwb/30min" target="_blank" rel="noopener">Book a 30-minute call</a>
+            <a class="btn btn-glass" href="mailto:ledgerdataautomation@gmail.com">ledgerdataautomation@gmail.com</a>
+          </div>
+        </div>
+        <footer>
+          <span>All client data and engagements are handled under NDA.</span>
+          <span><a href="https://www.linkedin.com/in/survenya-s-503a49116" target="_blank" rel="noopener">LinkedIn</a></span>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // loader -> ready
+      function go() { root.classList.add('ready'); setTimeout(function () { var l = document.getElementById('loader'); if (l) l.style.display = 'none'; }, 1200); }
+      var started = Date.now();
+      window.addEventListener('load', function () { setTimeout(go, Math.max(0, 1700 - (Date.now() - started))); });
+      setTimeout(go, 3200); // safety net if load is slow (e.g. embedded iframe)
+
+      // scroll reveals
+      var els = document.querySelectorAll('.reveal');
+      if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+        }, { threshold: .15, rootMargin: '0px 0px -6% 0px' });
+        els.forEach(function (el, i) { el.style.transitionDelay = (el.parentElement.classList.contains('trio') || false ? (Array.prototype.indexOf.call(el.parentElement.children, el) % 3) * 90 : 0) + 'ms'; io.observe(el); });
+      } else { els.forEach(function (el) { el.classList.add('in'); }); }
+
+      // glass highlight follows the pointer
+      document.addEventListener('pointermove', function (e) {
+        var t = e.target.closest && e.target.closest('.glass');
+        if (!t) return;
+        var r = t.getBoundingClientRect();
+        t.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+        t.style.setProperty('--my', (e.clientY - r.top) + 'px');
+      }, { passive: true });
+
+      // hero panes: gentle parallax
+      var stage = document.getElementById('stage');
+      if (stage && !reduce && window.matchMedia('(pointer:fine)').matches) {
+        var panes = stage.querySelectorAll('.pane');
+        window.addEventListener('pointermove', function (e) {
+          var x = (e.clientX / window.innerWidth - .5), y = (e.clientY / window.innerHeight - .5);
+          panes.forEach(function (p) { var d = +p.dataset.depth; p.style.setProperty('--tx', (x * d * -1.6) + 'px'); p.style.setProperty('--ty', (y * d * -1.6) + 'px'); });
+        }, { passive: true });
+      }
+
+      // scroll-linked: demo frame wipes open, process line fills
+      var fw = document.getElementById('frameWrap'), ticking = false;
+      function clamp(v) { return Math.max(0, Math.min(1, v)); }
+      function update() {
+        ticking = false;
+        var vh = window.innerHeight;
+        if (fw && !reduce) {
+          var r = fw.getBoundingClientRect();
+          var p = clamp((vh - r.top) / (vh * .65));
+          var inset = (1 - p) * 9;
+          fw.style.clipPath = 'inset(' + inset * .6 + '% ' + inset + '% ' + inset * .6 + '% ' + inset + '% round ' + (30 + (1 - p) * 14) + 'px)';
+        }
+      }
+      // illustrative stacked bars
+      document.querySelectorAll('[data-bars]').forEach(function (el) {
+        var seed = 7; function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+        var colors = ['#14b8a6', '#60a5fa', '#fbbf24', '#a78bfa'], parts = [.48, .2, .12, .2];
+        for (var i = 0; i < 14; i++) {
+          var dow = i % 7, scale = (dow === 4 || dow === 5) ? .9 : (dow === 6 ? .72 : .5);
+          var col = document.createElement('div'); col.className = 'bc';
+          parts.forEach(function (p, k) { var b = document.createElement('i'); b.style.height = (p * scale * 100 * (.9 + rnd() * .2)) + '%'; b.style.background = colors[k]; col.appendChild(b); });
+          el.appendChild(col);
+        }
+      });
+      function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll);
+      update();
+    })();
+  </script>
+</body>
+</html>
